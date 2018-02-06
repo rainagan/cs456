@@ -1,0 +1,27 @@
+Instructions of how to compile:
+1. Change to the directory that contains Receiver.java, Sender.java, Packet.java, channel.jar and Makefile
+2. On command line, type “make”, which will create Receiver.class and Sender.class, and Packet.class
+3. Run Receiver.java by typing "java Receiver <protocol type> <filename>
+3. Then, run channel.jar
+4. Before running Sender.java, create a file called <filename>. 
+Otherwise, Sender.java will throw exception
+5. Run Sender.java by typing "java Sender <protocol type> <timeout> <filename>
+
+Uncomplete:
+Haven't finish Selective Repeat
+
+Finished:
+Go-Back_N
+In Receiver.java, I create "recvInfo" to store port number and hostname, 
+which is sent to channel. Also, I create a file called <filename> to record the content of each packet. In a while loop, the receiver keep receiving packet 
+until it receives a EOT packet. If the receiver receives packets out of order, 
+it ignore the out-of-order packet. If receiver receives an EOT packet, send backan EOT packet and close. 
+In Sender.java, the receiver first read hostname and port number from "channelInfo" and open the source file called <filename>. Then, it translate the file intoa byte array and divide the byte array into slices. Each slice is 500 bytes, thelast slice could be less. Then, change these slices to packets and continueouslysend to channel. If the number of packets is larger than window size, rend them several times until all packets have been sent. After the sender sent 10 packets(could be less), loop to receive ACK. If timeout, resent from packets that 
+haven't received acknowledgement. If receive the last packet's acknowledgement, break from send loop and send EOT packet. After sender receives EOT packet, it 
+close its connection.
+
+Undergrad machines of test:
+ubuntu1604-002
+
+Version of make and compiler:
+javac 1.8.0_144

@@ -1,0 +1,318 @@
+import java.io.*;
+import java.net.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.*;
+
+public class Sender1 {
+
+	/* variables */
+	private static int protocol;
+	private static int timeout;
+	private static String filename;
+	private static InetAddress ip;
+	private static int port;
+	private static byte[] file;
+	private static DatagramSocket socket;
+	private static int packetNum;
+	private static String log;
+	
+	/* constant */
+	private static final int maxWindowSize = 10;
+
+	public static void main(String[] args) throws Exception {
+		if (args.length != 3) {
+			System.out.println("Incorrect input. Correct input is <protocol selector> <timeout value> <filename>");
+			System.exit(-1);
+		}
+		// 0 for go-back-n, 1 for selective repeat
+		int protocolSelector = Integer.parseInt(args[0]);
+		// value of timeout in milliseconds
+		timeout = Integer.parseInt(args[1]);
+		// filename to be transferred
+		String filename = args[2];
+
+		// open file called filename and save into a byte array
+		Path path = Paths.get(filename);
+		file = Files.readAllBytes(path);
+
+		// get total number of packet needed for this file
+		packetNum = (int) Math.ceil((double) file.length / 500);
+
+		// retrieve ip and port from channelInfo
+		Scanner scan = null;
+		try {
+			scan = new Scanner(new File("channelInfo"));
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		Scanner scan2 = new Scanner(scan.nextLine());
+		ip = InetAddress.getByName(scan2.next());
+		System.out.print(ip + " ");
+		port = Integer.parseInt(scan2.next());
+		System.out.println(port);
+		scan.close();
+		scan2.close();
+
+		/* create socket */
+		socket = new DatagramSocket();
+
+		/* sending alg */
+		if (protocol == 0) {
+			goBackN();
+		} else if (protocol == 1) {
+//			selectiveRepeat();
+		} else {
+			throw new Exception("incorrect protocol");
+		}
+	}
+
+//	private static void selectiveRepeat() throws Exception {
+//		/**
+//		 * TODO for ever window for each packet in window send 10 packet, wait ACK if
+//		 * timeout, re-send first non-ACKED if get ACK, set it to be ACKED if 10 packet
+//		 * all ACKED, slide window if 10 packet all ACKED, RHS-window == last packet
+//		 * send EOT
+//		 */
+//
+//		/* variable for first loop : for each window */
+//		int packetNum = (int) Math.ceil((double) file.length / 500); /* packet number */
+//		int LHSWindow = 0;
+//		int RHSWindow = 9;
+//		int seqNum = 0;
+//		int indOfWindow = -1;
+//
+//		/* for each window */
+//		while (LHSWindow < packetNum) {
+//
+//			System.out.println("window num of packet:" + packetNum);
+//			System.out.println("window LHSWindow:" + LHSWindow);
+//
+//			/* variable for second: for each packet in window */
+//			int[] ifACKed = new int[10];
+//			Arrays.fill(ifACKed, 0);
+//			int indInEachWindow = -1;
+//			int firstSend = 0;
+//
+//			/* send 10 packet */
+//			firstLoop: while (allACKed(ifACKed) != -1) {
+//				try {
+//					/* send 10 packet */
+//					for (int i = 0; i < 10 && firstSend != 10; i++) {
+//						byte[] chunk = null;
+//						if (i + LHSWindow < packetNum - 1) {
+//							chunk = Arrays.copyOfRange(file, (i + LHSWindow) * 500, (i + LHSWindow + 1) * 500);
+//						} else {
+//							chunk = Arrays.copyOfRange(file, (i + LHSWindow) * 500, file.length);
+//						}
+//						seqNum = (i + LHSWindow) % 256;
+//						Packet currentPacket = Packet.createPacket(seqNum, chunk);
+//						byte[] currentByte = currentPacket.toBytes();
+//						DatagramPacket packet = new DatagramPacket(currentByte, currentByte.length, hostIP, port);
+//						toReceiver.send(packet);
+//						toReceiver.setSoTimeout(timeout);
+//						print(true, currentPacket.getType(), currentPacket.getLength(), currentPacket.getSeqNum());
+//						if (i + LHSWindow >= packetNum - 1) {
+//							for (int j = i + 1; j < 10; j++) {
+//								ifACKed[j] = 1;
+//							}
+//							firstSend = 10;
+//							indInEachWindow = -1;
+//							break;
+//						}
+//						firstSend++;
+//
+//						// System.out.println("first sent = " + firstSend);
+//						// System.out.println("indInEachWindow = " + indInEachWindow);
+//
+//					}
+//					while (allACKed(ifACKed) != -1) {
+//						/* loop to get ACK */
+//						toReceiver.setSoTimeout(timeout);
+//						byte[] ackBytes = new byte[100];
+//						DatagramPacket ack = new DatagramPacket(ackBytes, ackBytes.length);
+//						toReceiver.receive(ack);
+//						Packet ackPacket = Packet.toPacket(ack.getData());
+//						print(false, ackPacket.getType(), ackPacket.getLength(), ackPacket.getSeqNum());
+//						if (ackPacket.getSeqNum() == 0) {
+//							indOfWindow++;
+//
+//							System.out.println("indOfWindow = " + indOfWindow);
+//
+//						}
+//						seqNum = indOfWindow * 256 + ackPacket.getSeqNum();
+//						int ACKind = seqNum - LHSWindow;
+//
+//						System.out.println("seqNum = " + seqNum);
+//						System.out.println("LHSWindow = " + LHSWindow);
+//
+//						ifACKed[ACKind] = 1;
+//					}
+//					if (allACKed(ifACKed) == -1) {
+//						break firstLoop;
+//					}
+//					if (indInEachWindow != -1 && allACKed(ifACKed) != -1) {
+//
+//						System.out.println("indInEachWindow = " + indInEachWindow);
+//
+//						byte[] chunk = null;
+//						if (indInEachWindow + LHSWindow < packetNum - 1) {
+//							chunk = Arrays.copyOfRange(file, (indInEachWindow + LHSWindow) * 500,
+//									(indInEachWindow + LHSWindow + 1) * 500);
+//						} else {
+//							chunk = Arrays.copyOfRange(file, (indInEachWindow + LHSWindow) * 500, file.length);
+//						}
+//						seqNum = (indInEachWindow + LHSWindow) % 256;
+//						Packet currentPacket = Packet.createPacket(seqNum, chunk);
+//						byte[] currentByte = currentPacket.toBytes();
+//						DatagramPacket packet = new DatagramPacket(currentByte, currentByte.length, hostIP, port);
+//						toReceiver.send(packet);
+//						toReceiver.setSoTimeout(timeout);
+//						indInEachWindow = -1;
+//						print(true, currentPacket.getType(), currentPacket.getLength(), currentPacket.getSeqNum());
+//					}
+//
+//				} catch (SocketTimeoutException e) {
+//					indInEachWindow = allACKed(ifACKed);
+//					if (indInEachWindow == -1) {
+//						System.err.println("non acked ind should be > 0 ");
+//					}
+//				}
+//			}
+//			LHSWindow += 10;
+//			RHSWindow += 10;
+//		}
+//		/* send eot packet */
+//		Packet EOT = Packet.createEOT(packetNum);
+//		byte[] eotByte = EOT.toBytes();
+//		DatagramPacket eotpacket = new DatagramPacket(eotByte, eotByte.length, hostIP, port);
+//		toReceiver.send(eotpacket);
+//		print(true, EOT.getType(), EOT.getLength(), EOT.getSeqNum());
+//
+//		/* receive eot packet */
+//		byte[] eotBytes = new byte[100];
+//		DatagramPacket eot = new DatagramPacket(eotBytes, eotBytes.length);
+//		toReceiver.receive(eot);
+//		Packet eotPacket = Packet.toPacket(eot.getData());
+//		print(false, eotPacket.getType(), eotPacket.getLength(), eotPacket.getSeqNum());
+//		if (eotPacket.getType() == 2) {
+//			toReceiver.close();
+//		} else {
+//			toReceiver.close();
+//			System.err.println("get EOT packet with packet: " + eotPacket.getType());
+//			return;
+//		}
+//
+//	}
+
+	/**
+	 * check if every packet in one window is ACKed if all ack, return -1 else
+	 * return ind of first non ack
+	 */
+	private static int allACKed(int[] ifACKed) {
+		for (int i = 0; i < 10; i++) {
+			if (ifACKed[i] == 0) {
+				return i;
+			}
+		}
+		return -1;
+	}
+
+	private static void goBackN() throws Exception {
+		int lastSent = 0; /* seq number of last sent */
+		int lastACK = 0; /* seq number of last ACK */
+		int init = -1;
+		Packet p;
+		byte[] receiveData;
+
+		sendPacketLoop:
+		while (true) {
+			/* send 10 packets */
+			while ((lastSent - lastACK) < maxWindowSize && lastSent < packetNum) {
+
+				byte[] chunk = null;
+				if (lastSent < packetNum - 1) {
+					chunk = Arrays.copyOfRange(file, lastSent * 500, (lastSent + 1) * 500);
+				} else {
+					chunk = Arrays.copyOfRange(file, lastSent * 500, file.length);
+				}
+				p = Packet.dataPacket(lastSent, chunk);
+
+				DatagramPacket packet = new DatagramPacket(p.PacketToByte(), p.PacketToByte().length, ip, port);
+				socket.send(packet);
+				log = "PKT SEND DAT ";
+				log += (int) p.getLength();
+				log += " ";
+				log += (int) p.getSeqNum();
+				System.out.println(log);
+				lastSent++;
+			}
+			/* check ACK */
+			try {
+				socket.setSoTimeout(timeout);
+				/* loop to get ACK */
+				for (int i = 0; i < 10; i++) {
+					receiveData = new byte[100]; // TODO
+					DatagramPacket ack = new DatagramPacket(receiveData, receiveData.length);
+					socket.receive(ack);
+					Packet ackPacket = Packet.byteToPacket(ack.getData());
+					log = "PKT RECV ACK 12 ";
+					log += (int) ackPacket.getSeqNum();
+					System.out.println(log);
+					if (ackPacket.getSeqNum() == 0) {
+						init++;
+					}
+					lastACK = (int) (init * 256 + ackPacket.getSeqNum());
+					if (lastACK == packetNum - 1) {
+						break sendPacketLoop;
+					}
+				}
+			} catch (SocketTimeoutException e) {
+				lastSent = lastACK;
+			}
+		}
+
+		/* send eot packet */
+		Packet eot = Packet.EOTPacket(lastACK + 1);
+		DatagramPacket eotpacket = new DatagramPacket(eot.PacketToByte(), eot.PacketToByte().length, ip, port);
+		socket.send(eotpacket);
+		log = "PKT SEND EOT ";
+		log += (int) p.getLength();
+		log += " ";
+		log += (int) p.getSeqNum();
+		print(true, EOT.getType(), EOT.getLength(), EOT.getSeqNum());
+
+		/* receive eot packet */
+		byte[] eotBytes = new byte[100];
+		DatagramPacket eot = new DatagramPacket(eotBytes, eotBytes.length);
+		toReceiver.receive(eot);
+		Packet eotPacket = Packet.byteToPacket(eot.getData());
+		print(false, eotPacket.getType(), eotPacket.getLength(), eotPacket.getSeqNum());
+		if (eotPacket.getType() == 2) {
+			toReceiver.close();
+		} else {
+			toReceiver.close();
+			System.err.println("get EOT packet with packet: " + eotPacket.getType());
+			return;
+		}
+	}
+
+	/* PKT {SEND|RECV} {DAT|ACK|EOT} <total length> <sequence number> */
+	private static void print(Boolean ifSend, int type, int length, int seq) throws Exception {
+		System.out.print("PKT ");
+		if (ifSend) {
+			System.out.print("SEND ");
+		} else if (!ifSend) {
+			System.out.print("RECV ");
+		}
+		if (type == 0) {
+			System.out.print("DAT " + length + " " + seq + "\n");
+		} else if (type == 1) {
+			System.out.print("ACK " + length + " " + seq + "\n");
+		} else if (type == 2) {
+			System.out.print("EOT " + length + " " + seq + "\n");
+		}
+	}
+
+}

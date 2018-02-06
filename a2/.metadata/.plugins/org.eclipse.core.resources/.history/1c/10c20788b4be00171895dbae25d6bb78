@@ -1,0 +1,83 @@
+package a2;
+
+import java.nio.ByteBuffer;
+
+public class Packet {
+	/* 0 indicate data packet
+	 * 1 indicate ACK packet
+	 * 2 indicate EOT packet
+	 */
+	private static long type;
+	// species total length of the packet in bytes, including 
+	// the packet header. 
+	// for ACK and EOT packets, the size of the packet is just
+	// the size of the header
+	private static long length;
+	/* for data packets, the sequence number range is [0...255]
+	 * for ACK packets, sequence number is the sequence number 
+	 * of the packet being acknowledged
+	 */
+	private long seqNumber;
+	private byte[] payload = new byte[500];
+	
+	Packet (int t, int l, int sn, byte[] p) throws Exception {
+		if (p.length > 500) {
+			throw new Exception("Exceed maximum payload length.");
+		} else {
+			type = unsignedInt(t);
+			length = unsignedInt(l) % 256;
+			seqNumber = unsignedInt(sn);
+			payload = p;
+		}
+	}
+	
+	// function that cast int to unsigned int
+	public long unsignedInt(int n) {
+		return n&0xffffffffl;
+	}
+	
+	public long getType() {
+		return type;
+	}
+	public static long getLength() {
+		return length;
+	}
+	public long getSeqNum() {
+		return seqNumber;
+	}
+	public byte[] getPayload() {
+		return payload;
+	}
+	public static Packet byteToPacket(byte[] b) throws Exception {
+		ByteBuffer wrapped = ByteBuffer.wrap(b);
+		int type = wrapped.getInt();
+		int length = wrapped.getInt();
+		int seqNumber = wrapped.getInt();
+		// type, length and seqNumber are all 32-bit unsigned int, so in total 12 bytes
+		byte[] payload = new byte[length-12];
+		wrapped.get(payload, 0, length-12);
+		Packet p = new Packet(type,length,seqNumber,payload);
+		return p;
+	}
+	public void dataPacket (int l, int sn, byte[] p) {
+//		Packet p = new Packet(t,l,sn,new byte[0]);
+		type = 0;
+		length = unsignedInt(l);
+		seqNumber = unsignedInt(sn);
+		payload = p;
+	}
+	public void ACKPacket (int l, int sn) throws Exception {
+//		Packet p = new Packet(t,l,sn,new byte[0]);
+		type = 1;
+		length = unsignedInt(l);
+		seqNumber = unsignedInt(sn);
+		payload = new byte[0];
+		return new Packet(1,l,sn,new byte[0]);
+	}
+	public void EOTPacket (int l, int sn) {
+		type = 2;
+		length = unsignedInt(l);
+		seqNumber = unsignedInt(sn);
+		payload = new byte[0];
+	}
+}

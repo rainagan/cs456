@@ -1,0 +1,33 @@
+Instructions of how to compile:
+1. type "make" or "make all" on command line
+2. Run ./server.sh to start server and ./client.sh followed by some parameters to start client
+
+Built and tested on:
+Mac OS Version 10.11.6
+
+Version of make and compiler:
+javac 1.8.0_144
+
+I've complete the whole assignment. 
+Server: 
+My server use a hashMap to store key and socket pair.
+My server first calls ServerSocket to generate a port number, then it opens a file called "port" to store the port number. 
+Then, it starts a while loop to receive new connections using socket.accept(). 
+After the server receives a connections, it first 
+examine the command:
+1. If it's 'G', and if the key is already in the hashMap, then server throws exception. If not, server stores
+this socket and key into hashMap.
+2. If it's 'P', server looks for match in the hashMap. If found match, the server creates a thread to handle file transfer.
+The thread takes in the two connection and a inputStream from uploader. Once create a file transfer thread, the server store
+it in an arrayList of threads. If the server doesn't found a match, it throws exception.
+3. If it's 'F', the server firse wait for all file transfer threads in the arrayList of thread to finish, then it close
+all waiting connections from unmatched clients. Then, the server closes its server socket.
+
+Client:
+My client first check if parameter is correct. If correct, if proceed. Otherwise, it throws exception.
+If client program sees command 'G', it first send ‘G', and its padded key. Then, it waits from server. If it receives data from 
+server, it writes to file called filename. Everytime client receive only receive size of data except the last time. Once it finished
+receiving, it closes connection.
+If client program sees command 'P', it sends command and key immediately followed by data. After sending data to server, it closes 
+its conenction.
+If client program sees command 'F', it send command and empty key to server and closes its connection.

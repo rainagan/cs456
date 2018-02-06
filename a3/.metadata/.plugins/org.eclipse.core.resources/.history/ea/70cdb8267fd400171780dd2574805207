@@ -1,0 +1,14 @@
+package a3;
+
+import java.net.Socket;
+
+public class fileExchangeThread extends Thread {
+	private Socket up;
+	private Socket down;
+	private BufferedReader inl
+	private DataOutputStream out;
+	public fileExchangeThread(Socket upload, Socket download) {
+		this.up = upload;
+		this.down = download;
+	}
+}

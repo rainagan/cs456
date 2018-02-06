@@ -1,0 +1,29 @@
+package a3;
+
+import java.io.*;
+import java.net.*;
+
+public class fileExchangeThread extends Thread {
+	private Socket up;
+	private Socket down;
+	private BufferedReader in;
+	private DataOutputStream out;
+	private String data;
+	
+	public fileExchangeThread(Socket upload, Socket download, BufferedReader in, String content) {
+		this.up = upload;
+		this.down = download;
+		this.in = in;
+		this.data = content;
+	}
+	
+	public void run() {
+		System.out.println("file exchange thread start");
+		try {
+			out = new DataOutputStream(down.getOutputStream());
+			out.writeBytes(data);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+}

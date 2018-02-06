@@ -1,0 +1,143 @@
+
+//package a2;
+
+import java.io.*;
+import java.net.*;
+import java.util.ArrayList;
+import java.util.Scanner;
+
+/* takes 2 arguments:
+ * 1. protocol selector: 0 for go-back-n or 1 for selective repeat
+ * 2. the filename to which the transferred file is written
+ */
+
+/* when receive EOT packet, it sends and EOT packet back and exits
+ */
+
+/* log message format: PKT {SEND|RECV} {DAT|ACK|EOT} <total length> <sequence number> */
+class Receiver {
+	private static DatagramSocket socket1;
+	private static int port;
+	private static InetAddress ip;
+	private static String str;
+	private static PrintStream file;
+	private static String log;
+	private static int expectSeqNum;
+
+	public static void main(String args[]) throws Exception {
+		if (args.length != 2) {
+			System.out.println("Incorrect input. Correct input is <protocol selector> <filename>");
+			System.exit(-1);
+		}
+		// 0 for go-back-n, 1 for selective repeat
+		int protocolSelector = Integer.parseInt(args[0]);
+//		System.out.println("protocol selector (0 gbn, 1 sr): " + protocolSelector);
+		// filename to which the transferred file is written
+		String filename = args[1];
+//		System.out.println("filename:" + filename);
+
+		// allocate a free port number and create UDP with that port number
+		socket1 = new DatagramSocket();
+		port = socket1.getLocalPort();
+//		System.out.println("port number: " + port);
+
+		// write ip and port to a recvInfo
+		str = "recvInfo ";
+		BufferedWriter buff = new BufferedWriter(new FileWriter("recvInfo"));
+		buff.write(InetAddress.getLocalHost().getHostName()+" "+Integer.toString(port)+"\n");
+		buff.close();
+//		System.out.println("created file");
+
+		// create a file called filename
+		file = new PrintStream(new FileOutputStream(filename));
+
+		if (protocolSelector == 0) {
+			goBackN();
+		} else if (protocolSelector == 1) {
+			selectiveRepeat();
+		} else {
+			System.out.println("incorrect protocol selector. Should be 0 or 1");
+			System.exit(-1);
+		}
+	}
+
+	public static void goBackN() throws Exception {
+//		System.out.println("call gbn");
+		byte[] receivedData;
+		byte[] sentData;
+		int seqNum, type, length;
+		Packet p;
+		// receive UDP packet
+		DatagramPacket r;
+		// send UDP packet
+		DatagramPacket s;
+
+		while (true) {
+			// receive UPD packet
+			receivedData = new byte[1024];
+			r = new DatagramPacket(receivedData, receivedData.length);
+			socket1.receive(r);
+			ip = r.getAddress();
+			port = r.getPort();
+//			System.out.println("received a packet");
+			
+			// retrieve info from packet
+			Packet pack = Packet.byteToPacket(r.getData());
+			type = (int) pack.getType();
+//			System.out.println("type = " + type);
+			length = (int) pack.getLength();
+//			System.out.println("length = " + length);
+			seqNum = (int) pack.getSeqNum();
+//			System.out.println("sequence number = " + seqNum);
+
+			// check if receiver receive the expected sequence number
+			if (seqNum > expectSeqNum) {
+				continue;
+			} else if (seqNum < expectSeqNum) {
+				expectSeqNum = seqNum+1;
+			}
+
+			// if receive data packet
+			if (type == 0) {
+				file.println(new String(pack.getPayload()).trim());
+				Packet ackPacket = Packet.ACKPacket(expectSeqNum);
+				sentData = ackPacket.PacketToByte();
+				s = new DatagramPacket(sentData, sentData.length, ip, port);
+				socket1.send(s);
+				expectSeqNum++;
+				expectSeqNum %= 256;
+				log = "PKT SEND ACK ";
+				log += (int) ackPacket.getLength();
+				log += " ";
+				log += (int) ackPacket.getSeqNum();
+				System.out.println(log);
+			}
+			// if receive ack packet
+			else if (type == 1) {
+				throw new Exception("receiver is not expected to receive ACK packet");
+			}
+			// if receive eot packet
+			else if (type == 2) {
+				Packet eotPacket = Packet.EOTPacket((int) pack.getSeqNum());
+				sentData = eotPacket.PacketToByte();
+				s = new DatagramPacket(sentData, sentData.length, ip, port);
+				socket1.send(s);
+				log = "PKT RECV EOT ";
+				log += (int) eotPacket.getLength();
+				log += " ";
+				log += (int) eotPacket.getSeqNum();
+				System.out.println(log);
+				break;
+			}
+			// if receive incorrect packet type
+			else {
+				throw new Exception("Incorrect packet type");
+			}
+		}
+		socket1.close();
+	}
+
+	public static void selectiveRepeat() {
+
+	}
+}

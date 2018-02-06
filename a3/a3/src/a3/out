@@ -1,0 +1,118 @@
+mport java.io.*;
+import java.net.*;
+import java.util.*;
+import java.lang.*;
+
+import org.omg.CosNaming.NamingContextPackage.NotEmpty;
+
+public class server {
+	// whether the server is terminated
+	private static boolean terminate;
+	// host name
+	private static String host;
+	// a map to store client's key and socket
+	private static Map<String, Socket> request = new HashMap<String, Socket>();
+	// server socket
+	private static ServerSocket socket;
+	// a list of file exchange threads
+	private static ArrayList<fileExchangeThread> threadList = new ArrayList<fileExchangeThread>();
+
+	public static void main(String[] args) throws Exception {
+		terminate = false;
+		// The server is started without any parameters and
+		// creates a TCP socket at an OS-assigned port.
+		socket = new ServerSocket(0);
+		int port = socket.getLocalPort();
+		// print out the assigned port number
+		System.out.println(port);
+		// store port number in a local file 'port'
+		BufferedWriter buff = new BufferedWriter(new FileWriter("port"));
+		buff.write(Integer.toString(port) + '\n');
+		buff.flush();
+		buff.close();
+
+		// handle request
+		while (true) {
+			// connection socket
+			Socket s = socket.accept();
+//			System.out.println("new conenction to server");
+
+			// read command from client
+			InputStream stream = s.getInputStream();
+			BufferedReader inFromClient = new BufferedReader(new InputStreamReader(stream));
+			int c;
+			StringBuilder temp = new StringBuilder();
+			for (int i = 0; i < 9; i++) {
+				c = inFromClient.read();
+				temp.append((char) c);
+			}
+			String command1 = temp.toString();
+
+			// read the char command
+			String command = command1.substring(0, 1);
+
+			// read the key
+			String key = command1.substring(1, 9);
+
+			// download
+			if (command.equals("G") && !terminate) {
+				// download tcp exist in dictionary
+				if (request.get(key) != null) {
+					throw new Exception("duplicate download key");
+				}
+				// download tcp not in dictionary
+				else {
+					// add this key value pair to request dictionary
+					request.put(key, s);
+				}
+			}
+			
+			// upload
+			else if (command.equals("P") && !terminate) {
+				// System.out.print("upload");
+				
+				// found a match
+				if (request.get(key) != null) {
+					// forward data, and remove key after forwarding
+					Socket download = request.remove(key);
+					
+					// start a thread to handle file exchange between uploader and downloader
+					fileExchangeThread thread = new fileExchangeThread(s, download, stream);
+					// add this thread to thread list and start this thread
+					threadList.add(thread);
+					thread.start();
+				}
+				// no match
+				else {
+					throw new Exception("uploader starts before downloader");
+				}
+			} else if (command.equals("F")) {
+//				System.out.println("terminate");
+				
+				// set terminate to be true
+				terminate = true;
+				
+				// wait for all fileExcahngeThread to finish
+				for (fileExchangeThread thread : threadList) {
+					thread.join();
+				}
+				// close all unpaired connection
+				for (Socket uc : request.values()) {
+					uc.close();
+					// print close information
+					System.out.println("Close unmatched download client");
+				}
+				break;
+			} else {
+				throw new Exception("Incorrect command");
+			}
+			// System.out.println("end of while");
+			// } catch (Exception e) {
+			// System.out.print("Connection error");
+			// }
+		}
+		// server socket close
+//		System.out.println("server closed");
+		socket.close();
+	}
+}

@@ -1,0 +1,198 @@
+
+//package a2;
+
+import java.io.*;
+import java.net.*;
+import java.nio.file.*;
+import java.util.*;
+
+/* takes 3 arguments:
+ * 1. protocol selector: 0 for go-back-n or 1 for selective repeat
+ * 2. the value of a timeout in milliseconds. used as the timeout period
+ * for the reliable data transfer protocol
+ * 3. the filename to be transferred
+ */
+
+/* during transfer, sender create packets containing 500 bytes payload
+ * if enough data is available
+ */
+/* After all contents of the file have been transmitted successfully to the receiver 
+ * and the corresponding ACKs have been received, the sender must send an EOT packet 
+ * to the receiver. The sender must exit after receiving the response EOT from the 
+ * receiver. You can assume that EOT packets are never lost.
+ */
+
+/* log message format: PKT {SEND|RECV} {DAT|ACK|EOT} <total length> <sequence number> */
+public class Sender {
+	// send window size is a fixed value of 10 packets
+	private static DatagramSocket socket;
+	private static int port;
+	private static InetAddress ip;
+	private static String str;
+	private static BufferedWriter buff;
+	private static String log;
+	private static int seqNum;
+	private static int timeout;
+	private static byte[] file;
+	private static int numPacket;
+	private static String filename;
+
+	public static void main(String[] args) throws Exception {
+		// check if we receive correct number of arguments
+		if (args.length != 3) {
+			System.out.println("Incorrect input. Correct input is <protocol selector> <timeout value> <filename>");
+			System.exit(-1);
+		}
+		
+		// 0 for go-back-n, 1 for selective repeat
+		int protocolSelector = Integer.parseInt(args[0]);
+		// value of timeout in milliseconds
+		timeout = Integer.parseInt(args[1]);
+		// filename to be transferred
+		filename = args[2];
+
+		// retrieve ip and port from channelInfo
+		Scanner scan = null;
+		try {
+			scan = new Scanner(new File("channelInfo"));
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+		Scanner scan2 = new Scanner(scan.nextLine());
+		ip = InetAddress.getByName(scan2.next());
+//		System.out.print(ip + " ");
+		port = Integer.parseInt(scan2.next());
+//		System.out.println(port);
+		scan.close();
+		scan2.close();
+		
+		// open UDP socket
+		socket = new DatagramSocket();
+
+		// open file called filename and save into a byte array
+		Path path = Paths.get(filename);
+		file = Files.readAllBytes(path);
+		// get total number of packet needed for this file
+		numPacket = (int) Math.ceil((double) file.length / 500);
+//		System.out.println("arraylist of packet size="+numPacket);
+
+		if (protocolSelector == 0) {
+			goBackN();
+		} else if (protocolSelector == 1) {
+			selectiveRepeat();
+		} else {
+			throw new Exception("incorrect protocol selector");
+		}
+	}
+
+	public static void goBackN() throws Exception {
+		ArrayList<Packet> packets = new ArrayList<Packet>();
+		byte[] sentData;
+		byte[] receivedData;
+		DatagramPacket sentPacket;
+		DatagramPacket receivedPacket;
+		// keep track of which packet in packets array list has been sent
+		int index = 0;
+		int expectACK = 0;
+		int temp = 0;
+		int lastSent, waitForAck;
+
+		// divide file into data packets and save them into array list of packets
+		for (int i = 0; i < numPacket-1; i++) {
+			Packet p = Packet.dataPacket(i, Arrays.copyOfRange(file, i*500, (i+1)*500));
+			packets.add(p);
+		}
+		Packet p = Packet.dataPacket(numPacket-1, Arrays.copyOfRange(file, (numPacket-1)*500, file.length));
+		packets.add(p);
+		
+		SEND_LOOP: while (true) {
+			while ()
+		}
+
+		// used for timeout
+		SEND_LOOP: while (true) {
+			// each time send 10 packets if there are enough
+			if ((numPacket-index) > 10) {
+				for (int i = 0; i < 10; i++) {
+					System.out.println("get packet "+index);
+					Packet p1 = packets.get(index);
+					sentData = p1.PacketToByte();
+					sentPacket = new DatagramPacket(sentData, sentData.length, ip, port);
+					socket.send(sentPacket);
+					System.out.println("PKT SEND DAT " + p1.getLength() + 
+							" " + p1.getSeqNum());
+					index++;
+					System.out.println("index++, index="+index);
+				}
+			} else {
+				for (int i = index; i < numPacket ; i++) {
+					System.out.println("get packet "+index);
+					Packet p1 = packets.get(index);
+					System.out.println("packet"+index+"'s seq num=" + (int) p1.getSeqNum());
+					sentData = p1.PacketToByte();
+					sentData = packets.get(index).PacketToByte();
+					sentPacket = new DatagramPacket(sentData, sentData.length, ip, port);
+					socket.send(sentPacket);
+					System.out.println(
+							"PKT SEND DAT " + p1.getLength() + " " + (int) p1.getSeqNum());
+					index++;
+					System.out.println("index++, index="+index);
+				}
+			}
+			// ckeck if timeout
+			try {
+//				System.out.println("expect ack packet");
+				socket.setSoTimeout(timeout);
+				while (temp < index) {
+					receivedData = new byte[1024];
+					receivedPacket = new DatagramPacket(receivedData, receivedData.length);
+					socket.receive(receivedPacket);
+					Packet ackPacket = Packet.byteToPacket(receivedPacket.getData());
+					if ((int) ackPacket.getSeqNum() == (numPacket-1)) {
+						System.out.println("PKT RECV ACK " + ackPacket.getLength() + " " + ackPacket.getSeqNum());
+						break SEND_LOOP;
+					}
+					if (expectACK == (int) ackPacket.getSeqNum()) {
+						expectACK++;
+						temp++;
+						System.out.println("PKT RECV ACK " + ackPacket.getLength() + " " + ackPacket.getSeqNum());
+					} else {
+						index = temp;
+						break;
+					}
+				}
+			} catch (Exception e) {
+//				System.out.println("time out exception");
+				index = expectACK;
+//				continue;
+			}
+		}
+
+		// it's time send eot packet
+		sentData = Packet.EOTPacket(numPacket).PacketToByte();
+		sentPacket = new DatagramPacket(sentData, sentData.length, ip, port);
+		socket.send(sentPacket);
+		System.out.println("PKT SEND EOT 12 " + numPacket);
+		
+		// wait to receive eot packet
+		receivedData = new byte[1024];
+		receivedPacket = new DatagramPacket(receivedData, receivedData.length);
+		socket.receive(receivedPacket);
+		Packet eotPacket = Packet.byteToPacket(receivedPacket.getData());
+		if (eotPacket.getType() == 2) {
+			log = "PKT RECV EOT ";
+			log += (int) eotPacket.getLength();
+			log += " ";
+			log += (int) eotPacket.getSeqNum();
+			System.out.println(log);
+			socket.close();
+		} else {
+			System.out.println("expected to receive EOT packet");
+			System.exit(-1);
+		}
+	}
+
+	public static void selectiveRepeat() throws Exception {
+
+	}
+}
